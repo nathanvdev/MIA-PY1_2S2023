@@ -376,9 +376,17 @@ def fdisk_logic(Path,fit,size,name):
 
     pass
 
-
-def mount_cmd(tokens):
-    print("mount:", tokens)
+def mount_cmd(Path, Name):
+    tmp_mbr = ReadDisk(Path)
+    if tmp_mbr == None:
+        print('no se encontro el disco')
+        return None
+    count = 0
+    for partition in tmp_mbr.partitions:
+        count += 1
+        if partition.name == Name.ljust(16)[:16]:
+            return partition, count
+    return None
 
 def unmount_cmd(tokens):
     print("unmount:", tokens)

@@ -105,7 +105,16 @@ class MBR:
             x.setBytes(bytes[start:finish])
             start += 30
             finish += 30
-        
+
+class Mount:
+    def __init__(self, count, name, path, tmp_part):
+        self.id = self.setID(count,name)
+        self.Path = path
+        self.Partition = tmp_part
+    
+    def setID(self,count, name):
+        return '68'+str(count)+name
+
         
             
 

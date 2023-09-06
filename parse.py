@@ -1,5 +1,9 @@
+import os
 import main, argparse
+from structs import Mount
 
+
+Mounts = []
 
 #main function 
 def cmd_parser(text):
@@ -42,12 +46,16 @@ def cmd_parser(text):
     mount_parser.add_argument('-path', type=str, required=True, help='ruta de la particion')
     mount_parser.add_argument('-name', type=str, required=True, help='nombre de la particion')
 
+    #cmd unmount
+    unmount_parser = subparsers.add_parser('unmount', help="desmontar una particion")
+    unmount_parser.add_argument('-id', type=str, required=True, help='id de la particion montada')
+
 
     
     # cmd MKFILE
     mkfile_parser = subparsers.add_parser('mkfile', help='Crear archivo')
-    mkfile_parser.add_argument('-name', type=str, required=True, help='Nombre del archivo')
-    mkfile_parser.add_argument('-age', type=int, required=True, help='Edad del archivo')
+    mkfile_parser.add_argument('-id', type=str, required=True, help='Nombre del archivo')
+
 
     args = parser.parse_args()
     # entrada = 'mkdisk -path=/home/user/Disco2.dsk -size=1000'
@@ -60,18 +68,20 @@ def cmd_parser(text):
         return
 
     #calls to cmd functions, must be classes ------------------------------------------
-
-    if int(args.size) <= 0:
-        print("Size debe ser mayor que 0")
-
-    elif args.command == 'mkdisk':
+    if args.command == 'mkdisk':
+        if int(args.size) <= 0:
+            print("Size debe ser mayor que 0")
+            return
         main.mkdisk_cmd(args.size, args.path, args.fit, args.unit)
 
     elif args.command == 'rmdisk':
         main.rmdisk_cmd(args.path)
 
     elif args.command == 'fdisk':
-
+        if int(args.size) <= 0:
+            print("Size debe ser mayor que 0")
+            return
+        
         if args.add != 99999 and args.delete != 'none':
             print('Comandos incompatibles')
         
@@ -88,7 +98,31 @@ def cmd_parser(text):
             main.fdisk_cmd(args.path, args.name, args.unit, args.size, args.type, args.fit)
         
     
+    elif args.command == 'mount':
 
+        tmp_part, count = main.mount_cmd(args.path, args.name)
+        if tmp_part == None:
+            return
+        
+        disk_name = os.path.splitext(os.path.basename(args.path))[0]
+        newMount = Mount(count, disk_name, args.path, tmp_part)
+        Mounts.append(newMount)
+
+        print('particion montada correctamente')
+        print(f"ID: {newMount.id}")
+        print(f"Ruta: {newMount.Path}")
+
+    elif args.command == 'unmount':
+
+        for mount in Mounts:
+            if mount.id == args.id:
+                Mounts.remove(mount)
+                print('particion desmontada correctamente')
+                print(f"ID: {mount.id}")
+                print(f"Ruta: {mount.Path}")
+                break
+
+        
     else:
         print("Comando no reconocido")
 
