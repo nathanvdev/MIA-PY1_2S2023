@@ -1,18 +1,16 @@
-import os
-import sys
-from structs import MBR, EBR
-
-
-##cambiar a funciones 
+import datetime, os, sys
+from structs import MBr, EBr, Partition, Mount, SuperBlock, Inodo
 
 
 def ReadDisk(Path):
+    Path = Path.replace('"','')
     try:
-        tmp_mbr = MBR(0, 'f')
+        tmp_MBr = MBr(0, 'f')
         with open(Path, 'rb+') as file:
             bindata = file.read()
-            tmp_mbr.set_bytes(bindata)
-            return tmp_mbr
+            tmp_MBr.set_bytes(bindata)
+            return tmp_MBr
+        
             
     except Exception as e:
         exception_type, exception_object, exception_traceback = sys.exc_info()
@@ -23,14 +21,14 @@ def ReadDisk(Path):
         print("File name: ", filename)
         print("Line number: ", line_number)
         print('Error: ',e)
-        return False
+        return None
 
-def WriteDisk(Path, tmp_mbr, Name):
-
+def WriteDisk(Path, tmp_MBr, Name):
+    Path = Path.replace('"','')
     try:
         with open(Path, 'rb+') as file:
             file.seek(0)
-            file.write(tmp_mbr.getBytes())
+            file.write(tmp_MBr.getBytes())
 
     except Exception as e:
         exception_type, exception_object, exception_traceback = sys.exc_info()
@@ -44,15 +42,22 @@ def WriteDisk(Path, tmp_mbr, Name):
         print("No se pudo modificar el archivo.")
 
 def mkdisk_cmd(Size,Path,Fit,Unit):
+
+    directorio = os.path.dirname(Path)
+    directorio = directorio.replace('"', '')
     if Unit == "m":
         Size *= 1024
-    NewMBR = MBR(Size, Fit)
+    NewMBr = MBr(Size, Fit)
+
+    os.makedirs(directorio, exist_ok=True)
+    Path = Path.replace('"', '')
+
 
     try:
         with open(Path, "wb+") as file:
             file.write(b'\x00' * 1024 * Size)
             file.seek(0)
-            file.write(NewMBR.getBytes())
+            file.write(NewMBr.getBytes())
 
     except Exception as e:
         exception_type, exception_object, exception_traceback = sys.exc_info()
@@ -68,12 +73,12 @@ def mkdisk_cmd(Size,Path,Fit,Unit):
     try:
         with open(Path, "rb") as file2:
             bindata = file2.read()
-            mbruno = MBR(0,'f')
-            mbruno.set_bytes(bindata)
-            print(f"Tamaño del disco: {mbruno.size}")
-            print(f"Fecha del disco: {mbruno.date}")
-            print(f"Firma del disco: {mbruno.dsk_signature}")
-            print(f"Ajuste del disco: {mbruno.fit}")
+            MBruno = MBr(0,'f')
+            MBruno.set_bytes(bindata)
+            print(f"Tamaño del disco: {MBruno.size}")
+            print(f"Fecha del disco: {MBruno.date}")
+            print(f"Firma del disco: {MBruno.dsk_signature}")
+            print(f"Ajuste del disco: {MBruno.fit}")
 
     except Exception as e:
         exception_type, exception_object, exception_traceback = sys.exc_info()
@@ -86,61 +91,67 @@ def mkdisk_cmd(Size,Path,Fit,Unit):
         print('Error: ',e)
 
 def rmdisk_cmd(p):
-
-        Path = p.replace('"', '')
-        
-        if os.path.exists(Path):
-            os.remove(Path)
-            print(f"El archivo '{Path}' ha sido eliminado.")
-        else:
-            print(f"El archivo '{Path}' no existe.")
+    Path = p.replace('"', '')
+    
+    if os.path.exists(Path):
+        os.remove(Path)
+        print(f"El archivo '{Path}' ha sido eliminado.")
+    else:
+        print(f"El archivo '{Path}' no existe.")
 
 def fdisk_cmd(Path,Name,Unit, Size,Type,Fit):
+    Path = Path.replace('"','')
     if Unit == "m":
         Size *= 1024
     Name = Name.replace('"','')
 
-    tmp_mbr = MBR(0,'f')
+    tmp_MBr = MBr(0,'f')
 
-    tmp_mbr = ReadDisk(Path)
-    if tmp_mbr == False:
+    tmp_MBr:MBr = ReadDisk(Path)
+    if tmp_MBr == False:
         return
+    
+    if Type == 'e':
+        for i in range(len(tmp_MBr.partitions)):
+            if tmp_MBr.partitions[i].type == 'e':
+                print('ya existe una particion extendida')
+                return
 
 
-    for i in range(len(tmp_mbr.partitions)):
-        if tmp_mbr.partitions[i].status == 0:
-            tmp_mbr.partitions[i].status = 1
-            tmp_mbr.partitions[i].type = Type
-            tmp_mbr.partitions[i].fit = Fit
-            tmp_mbr.partitions[i].size = int(Size)
-            tmp_mbr.partitions[i].setname(Name)
+    for i in range(len(tmp_MBr.partitions)):
+        if tmp_MBr.partitions[i].status == 0:
+            tmp_MBr.partitions[i].status = 1
+            tmp_MBr.partitions[i].type = Type
+            tmp_MBr.partitions[i].fit = Fit
+            tmp_MBr.partitions[i].size = int(Size)
+            tmp_MBr.partitions[i].setname(Name)
 
-            if tmp_mbr.partitions[i-1].size !=0:
-                newStart = tmp_mbr.partitions[i-1].start + tmp_mbr.partitions[i-1].size
-                tmp_mbr.partitions[i].start = newStart
+            if tmp_MBr.partitions[i-1].size !=0:
+                newStart = tmp_MBr.partitions[i-1].start + tmp_MBr.partitions[i-1].size
+                tmp_MBr.partitions[i].start = newStart
             else:
-                tmp_mbr.partitions[i].start = 148
+                tmp_MBr.partitions[i].start = 148
 
-            if tmp_mbr.partitions[i].type == 'e':
+            if tmp_MBr.partitions[i].type == 'e':
 
-                newEBR = EBR()
+                newEBr = EBr()
                 with open (Path, 'rb+') as filetmp:
-                    filetmp.seek(tmp_mbr.partitions[i].start)
-                    filetmp.write(newEBR.getBytes())
+                    filetmp.seek(tmp_MBr.partitions[i].start)
+                    filetmp.write(newEBr.getBytes())
                 
-                with open(Path, 'rb') as tmpfile:
+                with open(Path, 'rb+') as tmpfile:
                     bindata = tmpfile.read()
-                    tmpEBR = EBR()
-                    tmpEBR.setBytes(bindata[tmp_mbr.partitions[i].start: tmp_mbr.partitions[i].start+33])
+                    tmpEBr = EBr()
+                    tmpEBr.setBytes(bindata[tmp_MBr.partitions[i].start: tmp_MBr.partitions[i].start+33])
 
-            WriteDisk(Path, tmp_mbr, Name)
+            WriteDisk(Path, tmp_MBr, Name)
 
-            with open(Path, "rb") as file2:
+            with open(Path, "rb+") as file2:
                 bindata = file2.read()
-                mbruno = MBR(0,'f')
-                mbruno.set_bytes(bindata)
+                MBruno = MBr(0,'f')
+                MBruno.set_bytes(bindata)
 
-                for tmp_partiton in mbruno.partitions:
+                for tmp_partiton in MBruno.partitions:
                     if tmp_partiton.name == Name.ljust(16)[:16]:
                         print(f"Status: {tmp_partiton.status}")
                         print(f"Tipo: {tmp_partiton.type}")
@@ -152,7 +163,7 @@ def fdisk_cmd(Path,Name,Unit, Size,Type,Fit):
             return  # Para asegurarse de que solo se modifique una partición
         
     # Filtra las particiones con partition.status == 3
-    available_partitions = [partition for partition in tmp_mbr.partitions if partition.status == 2]
+    available_partitions = [partition for partition in tmp_MBr.partitions if partition.status == 2]
 
     if not available_partitions:
         print("Todas las particiones están llenas.")
@@ -165,14 +176,14 @@ def fdisk_cmd(Path,Name,Unit, Size,Type,Fit):
         print("Ya no hay espacio para esta particion")
         return   
 
-    if tmp_mbr.fit == 'f':
+    if tmp_MBr.fit == 'f':
         available_partitions[0].status = 1
         available_partitions[0].type = Type
         available_partitions[0].fit = Fit
         available_partitions[0].size = int(Size)
         available_partitions[0].setname(Name)
 
-    elif tmp_mbr.fit == 'b':
+    elif tmp_MBr.fit == 'b':
         #particion con el tamano mas pequeno
         min_partition = min(available_partitions, key=lambda partition: partition.size)
         min_partition.status = 1
@@ -181,7 +192,7 @@ def fdisk_cmd(Path,Name,Unit, Size,Type,Fit):
         min_partition.size = int(Size)
         min_partition.setname(Name)
 
-    elif tmp_mbr.fit == 'w':
+    elif tmp_MBr.fit == 'w':
         max_partition = max(available_partitions, key=lambda partition: partition.size)
         max_partition.status = 1
         max_partition.type = Type
@@ -189,14 +200,14 @@ def fdisk_cmd(Path,Name,Unit, Size,Type,Fit):
         max_partition.size = int(Size)
         max_partition.setname(Name)
 
-    WriteDisk(Path, tmp_mbr, Name)
+    WriteDisk(Path, tmp_MBr, Name)
 
-    with open(Path, "rb") as file2:
+    with open(Path, "rb+") as file2:
         bindata = file2.read()
-        mbruno = MBR(0,'f')
-        mbruno.set_bytes(bindata)
+        MBruno = MBr(0,'f')
+        MBruno.set_bytes(bindata)
 
-        for tmp_partiton in mbruno.partitions:
+        for tmp_partiton in MBruno.partitions:
             if tmp_partiton.name == Name.ljust(16)[:16]:
                 print(f"Status: {tmp_partiton.status}")
                 print(f"Tipo: {tmp_partiton.type}")
@@ -208,6 +219,7 @@ def fdisk_cmd(Path,Name,Unit, Size,Type,Fit):
     return  # Para asegurarse de que solo se modifique una partición
 
 def fdisk_add(Path,Name,Unit, Add):
+
     if Unit == "m":
         Size *= 1024
     Name = Name.replace('"','')
@@ -217,32 +229,35 @@ def fdisk_add(Path,Name,Unit, Add):
         Positive = False
 
     
-    tmp_mbr = ReadDisk(Path)
-    if tmp_mbr == False:
+    tmp_MBr = ReadDisk(Path)
+    if tmp_MBr == False:
         return
 
 
-    for i in range(len(tmp_mbr.partitions)):
-        if tmp_mbr.partitions[i].name == Name.ljust(16)[:16]:
+    for i in range(len(tmp_MBr.partitions)):
+        if tmp_MBr.partitions[i].name == Name.ljust(16)[:16]:
             if not Positive:
-                tmp_mbr.partitions[i].size += Add
+                tmp_MBr.partitions[i].size += Add
             else:
-                if tmp_mbr.partitions[i+1].size != 0:
-                    result =  tmp_mbr.partitions[i+1].start - (tmp_mbr.partitions[i].start + tmp_mbr.partitions[i].size)
+                if i + 1 >= len(tmp_MBr.partitions)-1:
+                    print('no hay sufuciente espacio')
+                    return
+                if tmp_MBr.partitions[i+1].size != 0:
+                    result =  tmp_MBr.partitions[i+1].start - (tmp_MBr.partitions[i].start + tmp_MBr.partitions[i].size)
                     if Add >  result:
                         print('no hay sufuciente espacio')
                     else:
-                        tmp_mbr.partitions[i].size += Add
+                        tmp_MBr.partitions[i].size += Add
             break 
 
-    WriteDisk(Path, tmp_mbr, Name)
+    WriteDisk(Path, tmp_MBr, Name)
         
-    with open(Path, "rb") as file2:
+    with open(Path, "rb+") as file2:
         bindata = file2.read()
-        mbruno = MBR(0,'f')
-        mbruno.set_bytes(bindata)
+        MBruno = MBr(0,'f')
+        MBruno.set_bytes(bindata)
 
-        for tmp_partiton in mbruno.partitions:
+        for tmp_partiton in MBruno.partitions:
             if tmp_partiton.name == Name.ljust(16)[:16]:
                 print(f"Status: {tmp_partiton.status}")
                 print(f"Tipo: {tmp_partiton.type}")
@@ -254,43 +269,67 @@ def fdisk_add(Path,Name,Unit, Add):
 
 def fdisk_del(Path,Name):
     Name = Name.replace('"','')
+    Path = Path.replace('"','')
         
     try:
-        tmp_mbr = MBR(0, 'f')
+        tmp_MBr = MBr(0, 'f')
         #Leer el Disco
         with open(Path, 'rb+') as file:
             bindata = file.read()
-            tmp_mbr.set_bytes(bindata)
+            tmp_MBr.set_bytes(bindata)
 
         #Eliminar particion
-        for tmp_partiton in tmp_mbr.partitions:
+        for tmp_partiton in tmp_MBr.partitions:
+
             if tmp_partiton.name == Name.ljust(16)[:16]:
                 tmp_partiton.status = 2
-
                 with open(Path, 'rb+') as file:
                     file.seek(0)
-                    file.write(tmp_mbr.getBytes())
+                    file.write(tmp_MBr.getBytes())
+                    file.seek(tmp_partiton.start+34)
+                    for i in range(tmp_partiton.size-34):
+                        file.write(b'\x00')
 
-                    file.seek(tmp_partiton.start)
-                    file.write(b'\x00' * 1024 * tmp_mbr.size)
+                print('particion eliminada correctamente')
+                print(f"Status: {tmp_partiton.status}")
+                print(f"Tipo: {tmp_partiton.type}")
+                print(f"Fit: {tmp_partiton.fit}")
+                print(f"Start: {tmp_partiton.start}")
+                print(f"Size: {tmp_partiton.size}")
+                print(f"Name: {tmp_partiton.name}")
+
                 break
-        
 
-        with open(Path, "rb") as file2:
-            bindata = file2.read()
-            mbruno = MBR(0,'f')
-            mbruno.set_bytes(bindata)
+            if tmp_partiton.type == 'e':
 
-            for tmp_partiton in mbruno.partitions:
-                if tmp_partiton.name == Name.ljust(16)[:16]:
-                    print(f"Status: {tmp_partiton.status}")
-                    print(f"Tipo: {tmp_partiton.type}")
-                    print(f"FIt: {tmp_partiton.fit}")
-                    print(f"Start: {tmp_partiton.start}")
-                    print(f"Size: {tmp_partiton.size}")
-                    print(f"Name: {tmp_partiton.name}")
+                tmp_EBr:EBr = EBr()
+                tmp_EBr.setBytes(bindata[(tmp_partiton.start):(tmp_partiton.start+33)])
+                while tmp_EBr.name != Name.ljust(16)[:16]:
+                    if tmp_EBr.next == -1:
+                        print('no se encontro la particion')
+                        return
+                    tmp_EBr.setBytes(bindata[(tmp_EBr.next):(tmp_EBr.next+33)])
+                
+                if tmp_EBr.name == Name.ljust(16)[:16]:
+                    tmp_EBr.status = 2
+                    with open(Path, 'rb+') as file:
+                        file.seek(tmp_EBr.start)
+                        file.write(tmp_EBr.getBytes())
+                        file.seek(tmp_EBr.start+34)
+                        for i in range(tmp_EBr.size-34):
+                            file.write(b'\x00')
+
+                    print('particion logica eliminada correctamente')
+                    print(f"Status: {tmp_EBr.status}")
+                    print(f"Fit: {tmp_EBr.fit}")
+                    print(f"Start: {tmp_EBr.start}")
+                    print(f"Size: {tmp_EBr.size}")
+                    print(f"Name: {tmp_EBr.name}")
                     break
+                else:
+                    print('no se encontro la particion')
 
+    
     except FileNotFoundError:
         print("El archivo no existe o no se puede abrir.")
         return
@@ -306,22 +345,23 @@ def fdisk_del(Path,Name):
         return
 
 def fdisk_logic(Path,fit,size,name):
+    Path = Path.replace('"','')
     part_size = size
-    tmp_mbr = MBR(0,'-')
-    tmp_ebr = EBR()
+    tmp_MBr = MBr(0,'-')
+    tmp_EBr = EBr()
     
-    new_ebr = EBR()
-    new_ebr.status = 1
-    new_ebr.fit = fit
-    new_ebr.size = size
-    new_ebr.setname(name)
+    new_EBr = EBr()
+    new_EBr.status = 1
+    new_EBr.fit = fit
+    new_EBr.size = size
+    new_EBr.setname(name)
 
     try:
         with open(Path, 'rb+') as file:
             bindata = file.read()
-            tmp_mbr.set_bytes(bindata)
+            tmp_MBr.set_bytes(bindata)
 
-            tmp_partiton = next((partition for partition in tmp_mbr.partitions if partition.type == 'e'), None)
+            tmp_partiton = next((partition for partition in tmp_MBr.partitions if partition.type == 'e'), None)
             if tmp_partiton == None :
                 print("no se encotro una particion extendida")
                 return
@@ -329,40 +369,50 @@ def fdisk_logic(Path,fit,size,name):
                 print('espacio insuficiente')
                 return
             
-            tmp_ebr.setBytes(bindata[(tmp_partiton.start):(tmp_partiton.start+33)])
-            part_size += tmp_ebr.size
+            tmp_EBr.setBytes(bindata[(tmp_partiton.start):(tmp_partiton.start+33)])
             
 
-            if tmp_ebr.status == 0:
-                new_ebr.start = tmp_partiton.start
+            if tmp_EBr.status == 0:
+                new_EBr.start = tmp_partiton.start
 
             else:
                 num_LogicParts = 0
-                while tmp_ebr.next != -1:
+                while tmp_EBr.next != -1:
                     if num_LogicParts >= 26:
                         print("se llego al limite de particiones logicas")
                         return
+                    if tmp_EBr.name == name.ljust(16)[:16]:
+                        print('ya existe una particion con ese noMBre')
+                        return
 
                     
-                    tmp_ebr.setBytes(bindata[tmp_ebr.next:tmp_ebr.next+33])
-                    part_size += tmp_ebr.size
+                    tmp_EBr.setBytes(bindata[tmp_EBr.next:tmp_EBr.next+33])
+                    part_size += tmp_EBr.size
                     num_LogicParts += 1
 
                 if part_size > tmp_partiton.size:
                     print('espacio insuficiente')
                     return
+                if tmp_EBr.name == name.ljust(16)[:16]:
+                        print('ya existe una particion con ese noMBre')
+                        return
                 
-                tmp_ebr.next = (tmp_ebr.start+tmp_ebr.size)
-                file.seek(tmp_ebr.start)
-                file.write(tmp_ebr.getBytes())
+                tmp_EBr.next = (tmp_EBr.start+tmp_EBr.size)
+                file.seek(tmp_EBr.start)
+                file.write(tmp_EBr.getBytes())
 
-                new_ebr.start = (tmp_ebr.start+tmp_ebr.size)
-            file.seek(new_ebr.start)
-            file.write(new_ebr.getBytes())
-
-
+                new_EBr.start = (tmp_EBr.next)
             
-            
+            file.seek(new_EBr.start)
+            file.write(new_EBr.getBytes())
+
+            print('particion logica creada correctamente')
+            print(f"Status: {new_EBr.status}")
+            print(f"FIt: {new_EBr.fit}")
+            print(f"Start: {new_EBr.start}")
+            print(f"Size: {new_EBr.size}")
+            print(f"Name: {new_EBr.name}")
+
     except Exception as e:
         exception_type, exception_object, exception_traceback = sys.exc_info()
         filename = exception_traceback.tb_frame.f_code.co_filename
@@ -377,22 +427,119 @@ def fdisk_logic(Path,fit,size,name):
     pass
 
 def mount_cmd(Path, Name):
-    tmp_mbr = ReadDisk(Path)
-    if tmp_mbr == None:
+    Path = Path.replace('"','')
+    tmp_MBr = ReadDisk(Path)
+    if tmp_MBr == None:
         print('no se encontro el disco')
-        return None
+        return None, None
     count = 0
-    for partition in tmp_mbr.partitions:
+    for partition in tmp_MBr.partitions:
         count += 1
         if partition.name == Name.ljust(16)[:16]:
             return partition, count
-    return None
+        
+        if partition.type == 'e':
+            with open(Path, 'rb+') as file:
+                bindata = file.read()
 
-def unmount_cmd(tokens):
-    print("unmount:", tokens)
+                tmp_EBr:EBr = EBr()
+                tmp_EBr.setBytes(bindata[(partition.start):(partition.start+33)])
+                count += 1
+                while tmp_EBr.name != Name.ljust(16)[:16]:
 
-def mkfs_cmd(tokens):
-    print("mkfs:", tokens)
+                    if tmp_EBr.next == -1:
+                        print('no es una particion logica')
+                        break
+                    tmp_EBr.setBytes(bindata[(tmp_EBr.next):(tmp_EBr.next+33)])
+                    count += 1
+                
+                if tmp_EBr.name == Name.ljust(16)[:16]:
+                    return tmp_EBr, count
+    return None, None
+
+def mkfs_ext2(mount: Mount):
+
+    try:
+        with open(mount.Path, 'rb+') as file:
+            bindata = file.read()
+            tmp_part:Partition = tmp_part.setBytes(bindata[mount.Partition.start:mount.Partition.start+30])
+
+            #ext2 = (Part.size - Superblock.size)/(4+inodo.size+3(block.size))
+            ext2 = (int(tmp_part.size) - 98) / (4 + 137 + 3 * 64)
+            #ext3 = (Part.size - Superblock.size)/(4+journaling.size+inodo.size+3(block.size))
+            ext3 = (int(tmp_part.size) - 98) / (4 + 1024 + 137 + 3 * 64)
+
+            newSuperBlock = SuperBlock()
+            newSuperBlock.umtiem = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
+            newSuperBlock.mnt_count = 1
+
+            newSuperBlock.filesystem_type = 2
+            newSuperBlock.inodecount = ext2
+            newSuperBlock.blockcount = 3*ext2
+            newSuperBlock.free_inodecount = ext2
+            newSuperBlock.free_blockcount = 3*ext2
+
+            newSuperBlock.bm_inode_start = tmp_part.start + 98
+            newSuperBlock.bm_block_start = newSuperBlock.bm_inode_start + ext2
+            newSuperBlock.inode_start = newSuperBlock.bm_block_start + 3*ext2
+            newSuperBlock.block_start = newSuperBlock.inode_start + ext2*137
+
+            totalSize = int(newSuperBlock.block_start) + 3 * ext2 * 64
+            if totalSize > tmp_part.size:  
+                print('no hay espacio suficiente')
+                return
+            
+            #Escrubir SuperBloque
+            file.seek(tmp_part.start)
+            file.write(newSuperBlock.getBytes())
+
+            #Escribir Bitmap de Inodos
+            file.seek(newSuperBlock.bm_inode_start)
+            file.write(b'\x00' * 1024 * ext2)
+
+            #Escribir Bitmap de Bloques
+            file.seek(newSuperBlock.bm_block_start)
+            file.write(b'\x00' * 1024 * 3*ext2)
+
+            #Escribir Inodos
+            for i in range(ext2):
+                newInodo = Inodo()
+                file.seek(newSuperBlock.inode_start)
+                file.write(newInodo.getBytes())
+
+            #Escribir Bloques
+            for i in range(3*ext2):
+                file.seek(newSuperBlock.block_start)
+                file.write(b'\x00' * 1024 * 64)
+
+
+
+
+
+            
+    except Exception as e:
+        exception_type, exception_object, exception_traceback = sys.exc_info()
+        filename = exception_traceback.tb_frame.f_code.co_filename
+        line_number = exception_traceback.tb_lineno
+        print("No se pudo leer la información del disco.")
+        print("Exception type: ", exception_type)
+        print("File name: ", filename)
+        print("Line number: ", line_number)
+        print('Error: ',e)
+        return False
+
+
+    # n = (tmp_part.size-98/(4+))
+
+
+
+
+
+
+
+
+    
+    print("mkfs:")
 
 def login_cmd(tokens):
     print("login:", tokens)

@@ -1,5 +1,6 @@
 import os
-import main, argparse
+import re
+import main, reprtes, argparse
 from structs import Mount
 
 
@@ -15,6 +16,10 @@ def cmd_parser(text):
 
     # cmd exit
     exit_parser = subparsers.add_parser('exit', help='salir del programa')
+
+    # cmd exec
+    exec_parser = subparsers.add_parser('execute', help='ejecutar un archivo')
+    exec_parser.add_argument('-path', type=str, required=True, help='ruta del archivo')
 
 
     # cmd MKDISK
@@ -33,7 +38,7 @@ def cmd_parser(text):
     fdisk_parser = subparsers.add_parser('fdisk', help='administrar particiones')
     fdisk_parser.add_argument('-size', type=int, required=False, help='tamaño de la particion', default=99999)
     fdisk_parser.add_argument('-path', type=str, required=True, help='ruta donde se ecuentra el disco')
-    fdisk_parser.add_argument('-name', type=str, required=True, help='indicara el nombre de la particion')
+    fdisk_parser.add_argument('-name', type=str, required=True, help='indicara el noMBre de la particion')
     ## optional
     fdisk_parser.add_argument('-unit', type=str.lower, required=False, help='indica las unidades del size', choices=['b','k','m'], default='k')
     fdisk_parser.add_argument('-type', type=str.lower, required=False, help='tipo de particion', choices=['p','e','l'], default='p')
@@ -44,17 +49,30 @@ def cmd_parser(text):
     # cmd Mount
     mount_parser = subparsers.add_parser('mount', help='montar una particion')
     mount_parser.add_argument('-path', type=str, required=True, help='ruta de la particion')
-    mount_parser.add_argument('-name', type=str, required=True, help='nombre de la particion')
+    mount_parser.add_argument('-name', type=str, required=True, help='noMBre de la particion')
 
     #cmd unmount
     unmount_parser = subparsers.add_parser('unmount', help="desmontar una particion")
     unmount_parser.add_argument('-id', type=str, required=True, help='id de la particion montada')
 
+    #cmd MKFS
+    mkfs_parser = subparsers.add_parser('mkfs', help="formatear particiones")
+    mkfs_parser.add_argument('-id', type=str, required=True, help="id de la particion")
+    ##optional
+    mkfs_parser.add_argument('-type', type=str.lower, required=False, help='tipo de formateo', choices=['full'], default='full')
+    mkfs_parser.add_argument('-fs', type=str.lower, required=False, help='formato del sistema de archivos', choices=['2fs','3fs'], default='2fs')
+
+    #cmd REP
+    rep_parser = subparsers.add_parser('rep', help="reportes")
+    rep_parser.add_argument('-name', type=str.lower, required=True, help="noMBre del reporte", choices=['mbr','disk','inode','journalig','block','bm_inode','bm_block','tree','sb','file','ls'])
+    rep_parser.add_argument('-path', type=str, required=True, help="ruta y noMBre del reporte")
+    rep_parser.add_argument('-id', type=str, required=False, help="id de la particion")
+    rep_parser.add_argument('-ruta', type=str, required=False, help="ruta del archivo a reportar")
 
     
     # cmd MKFILE
     mkfile_parser = subparsers.add_parser('mkfile', help='Crear archivo')
-    mkfile_parser.add_argument('-id', type=str, required=True, help='Nombre del archivo')
+    mkfile_parser.add_argument('-id', type=str, required=True, help='NoMBre del archivo')
 
 
     args = parser.parse_args()
@@ -62,7 +80,15 @@ def cmd_parser(text):
 
     #read the input, must be changed to file content
     try:
-        args = parser.parse_args(text.split())
+        text = text.split()
+        for x in range(0,len(text)):
+            if text[x].startswith('-path="'):
+                text[x] += ' '+text[x+1]
+                text.pop(x+1)
+                break
+        text[0] = text[0].lower()
+
+        args = parser.parse_args(text)
     except SystemExit:
         print("Entrada no válida")
         return
@@ -121,8 +147,74 @@ def cmd_parser(text):
                 print(f"ID: {mount.id}")
                 print(f"Ruta: {mount.Path}")
                 break
+        print('no se encontro la particion montada')
 
+    elif args.command == 'mkfs':
+
+        tmp_mount = Mount(0,'-','-',None)
+
+        for mount in Mount:
+            if mount.id == args.id:
+                tmp_mount = mount
+                break
         
+        if tmp_mount.Path == '-':
+            print('no se encontro montada la particion')
+            return
+
+        if args.fs == '2fs':
+            pass
+        elif args.fs == '3fs':
+            pass
+
+    elif args.command == 'rep':
+        if args.name == 'mbr':
+            for mount in Mounts:
+                if mount.id == args.id:
+                    reprtes.MBrReport(args.path, mount)
+                    break
+            print('no se encontro la particion montada')
+
+        elif args.name == 'disk':
+            for mount in Mounts:
+                if mount.id == args.id:
+                    reprtes.DiskReport(args.path, mount)
+                    break
+            print('no se encontro la particion montada')
+        
+            
+    elif args.command == 'execute':
+
+        try:
+        # Abre el archivo en modo lectura ('r')
+            with open(args.path, 'r') as archivo:
+                # Lee e imprime cada línea del archivo
+                for linea in archivo:
+                    # Encuentra la posición del primer carácter '#' en la línea
+                    indice_comentario = linea.find('#')
+                    if indice_comentario != -1:
+                        # Si se encuentra un carácter '#', toma solo la parte antes de él como comando
+                        comando = linea[:indice_comentario].strip()
+                        comentario = linea[indice_comentario:].strip()
+                    else:
+                        # Si no hay '#' en la línea, usa la línea completa como comando
+                        comando = linea.strip()
+                        comentario = ''
+
+                    # Imprime el número de comando, el comando y el comentario
+                    if comentario != '':
+                        print(comentario)
+
+                    if comando != '':
+                        print(comando)
+                        cmd_parser(comando)
+                        print('--------------------------------------')
+
+        except FileNotFoundError:
+            print(f"El archivo '{args.path}' no se encontró.")
+        except Exception as e:
+            print(f"Ocurrió un error al leer el archivo: {str(e)}")
+
     else:
         print("Comando no reconocido")
 
@@ -135,6 +227,7 @@ if __name__ == '__main__':
         print("--------------------------------exit para salir-------------------------------")
         
         text = input()
+        print()
 
         if text.lower() == "exit":
             break
