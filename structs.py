@@ -113,7 +113,8 @@ class Mount:
     
 class SuperBlock:
     def __init__(self):
-        current_time = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
+        current_time = datetime.now()
+        current_time = current_time.strftime("%d-%m-%Y %H:%M:%S")
 
         self.filesystem_type = -1               #int 4bytes
         self.inodecount = -1                    #int 4bytes
@@ -240,13 +241,13 @@ class Content:
 
 class Block:
     def __init__(self):
-        self.b_content = [Content('-',-1)] * 4      #Content 64bytes
+        self.b_content = [Content('-', -1) for _ in range(4)]      #Content 64bytes
         #-------------------------------------> 64 bytes
 
     def getBytes(self):
         bytes = bytearray()
         for x in self.b_content:
-            bytes += x.to_bytes(4, byteorder='big', signed=True)
+            bytes += x.getBytes()
         return bytes
     
     def setBytes(self, bytes):
@@ -256,3 +257,22 @@ class Block:
             self.b_content[x] = int.from_bytes(bytes[start:finish], byteorder='big', signed=True)
             start += 4
             finish += 4
+    
+
+class BlockFile:
+    def __init__(self, n = '-'):
+        self.b_content = n.ljust(64)[:64]  #char 64bytes
+
+    def getBytes(self):
+        bytes = bytearray()
+        bytes += self.b_content.encode('utf-8')
+        return bytes
+    
+    def setBytes(self, bytes):
+        self.b_content = bytes[0:64].decode('utf-8')
+
+    def setContent(self, content):
+        self.b_content = content.ljust(64)[:64]
+
+class Journaling:
+    pass

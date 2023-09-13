@@ -1,5 +1,6 @@
-import datetime, os, sys
-from structs import MBr, EBr, Partition, Mount, SuperBlock, Inodo
+import os, sys
+from structs import MBr, EBr, Mount, SuperBlock, Inodo, Block, BlockFile
+from datetime import datetime
 
 
 def ReadDisk(Path):
@@ -193,6 +194,8 @@ def fdisk_cmd(Path,Name,Unit, Size,Type,Fit):
         min_partition.setname(Name)
 
     elif tmp_MBr.fit == 'w':
+        # The above code is finding the partition with the maximum size from a list of available
+        # partitions.
         max_partition = max(available_partitions, key=lambda partition: partition.size)
         max_partition.status = 1
         max_partition.type = Type
@@ -458,65 +461,110 @@ def mount_cmd(Path, Name):
     return None, None
 
 def mkfs_ext2(mount: Mount):
+    tmp_part = mount.Partition
+
+    #ext2 = (Part.size - Superblock.size)/(4+inodo.size+3(block.size))
+    ext2 = (tmp_part.size - 98) / (4 + 137 + (3 * 64))
+    #ext3 = (Part.size - Superblock.size)/(4+journaling.size+inodo.size+3(block.size))
+    ext3 = (tmp_part.size - 98) / (4 + 1024 + 137 + (3 * 64))
+
+    current_time = datetime.now()
+    newSuperBlock:SuperBlock = SuperBlock()
+    newSuperBlock.umtiem = current_time.strftime("%d-%m-%Y %H:%M:%S")
+    newSuperBlock.mnt_count = 1
+
+    newSuperBlock.filesystem_type = 2
+    newSuperBlock.inodecount = int(ext2)
+    newSuperBlock.blockcount = int(3*ext2)
+    newSuperBlock.free_inodecount = int(ext2)
+    newSuperBlock.free_blockcount = int(3*ext2)
+
+    newSuperBlock.bm_inode_start = int(tmp_part.start + 98)
+    newSuperBlock.bm_block_start = int(newSuperBlock.bm_inode_start + ext2)
+    newSuperBlock.inode_start = int(newSuperBlock.bm_block_start + (3*ext2))
+    newSuperBlock.block_start = int(newSuperBlock.inode_start + (ext2*137))
+
+    totalSize = int(newSuperBlock.block_start) + (3 * ext2 * 64)
+    totalSize = totalSize - tmp_part.start
+    if totalSize > tmp_part.size:  
+        print('no hay espacio suficiente')
+        return
 
     try:
-        with open(mount.Path, 'rb+') as file:
-            bindata = file.read()
-            tmp_part:Partition = tmp_part.setBytes(bindata[mount.Partition.start:mount.Partition.start+30])
-
-            #ext2 = (Part.size - Superblock.size)/(4+inodo.size+3(block.size))
-            ext2 = (int(tmp_part.size) - 98) / (4 + 137 + 3 * 64)
-            #ext3 = (Part.size - Superblock.size)/(4+journaling.size+inodo.size+3(block.size))
-            ext3 = (int(tmp_part.size) - 98) / (4 + 1024 + 137 + 3 * 64)
-
-            newSuperBlock = SuperBlock()
-            newSuperBlock.umtiem = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
-            newSuperBlock.mnt_count = 1
-
-            newSuperBlock.filesystem_type = 2
-            newSuperBlock.inodecount = ext2
-            newSuperBlock.blockcount = 3*ext2
-            newSuperBlock.free_inodecount = ext2
-            newSuperBlock.free_blockcount = 3*ext2
-
-            newSuperBlock.bm_inode_start = tmp_part.start + 98
-            newSuperBlock.bm_block_start = newSuperBlock.bm_inode_start + ext2
-            newSuperBlock.inode_start = newSuperBlock.bm_block_start + 3*ext2
-            newSuperBlock.block_start = newSuperBlock.inode_start + ext2*137
-
-            totalSize = int(newSuperBlock.block_start) + 3 * ext2 * 64
-            if totalSize > tmp_part.size:  
-                print('no hay espacio suficiente')
-                return
-            
+        with open(mount.Path.replace(' ',''), 'rb+') as file:
             #Escrubir SuperBloque
             file.seek(tmp_part.start)
             file.write(newSuperBlock.getBytes())
 
             #Escribir Bitmap de Inodos
             file.seek(newSuperBlock.bm_inode_start)
-            file.write(b'\x00' * 1024 * ext2)
+            file.write(b'0' * int(ext2))
 
             #Escribir Bitmap de Bloques
             file.seek(newSuperBlock.bm_block_start)
-            file.write(b'\x00' * 1024 * 3*ext2)
-
-            #Escribir Inodos
-            for i in range(ext2):
-                newInodo = Inodo()
-                file.seek(newSuperBlock.inode_start)
-                file.write(newInodo.getBytes())
-
-            #Escribir Bloques
-            for i in range(3*ext2):
-                file.seek(newSuperBlock.block_start)
-                file.write(b'\x00' * 1024 * 64)
-
-
-
-
+            file.write(b'0' * int(3*ext2))
 
             
+            #Primer Inodo
+            newInodo:Inodo = Inodo()
+            newInodo.i_uid = 1
+            newInodo.i_gid = 1
+            newInodo.i_size = 0
+            newInodo.i_atime = current_time.strftime("%d-%m-%Y %H:%M:%S")
+            newInodo.i_mtime = current_time.strftime("%d-%m-%Y %H:%M:%S")
+            newInodo.i_block[0] = 0
+            newInodo.i_type = 0
+            newInodo.i_perm = 664;  ##  permisos  los primeros 3 bits Uusuario i_uid. los siguientes 3  grupo que pertenece y ultimos 3 permisos de otros usuarios.
+            
+            newBlock:Block = Block()
+            newBlock.b_content[0].setName('.')
+            newBlock.b_content[0].b_inodo = 0
+            newBlock.b_content[1].setName('..')
+            newBlock.b_content[1].b_inodo = 0
+            newBlock.b_content[2].setName('users.txt') 
+            newBlock.b_content[2].b_inodo = 1
+            newBlock.b_content[3].setName('-') 
+            newBlock.b_content[3].b_inodo = -1
+
+
+            #inodo 1
+            data = "1,G,root\n1,U,root,root,123\n";
+            newInodo1:Inodo = Inodo()
+            newInodo1.i_uid = 1
+            newInodo1.i_gid = 1 
+            newInodo1.i_size = len(data) + 64 # 64 es el tamaño del bloque
+            newInodo1.i_atime = current_time.strftime("%d-%m-%Y %H:%M:%S")
+            newInodo1.i_mtime = current_time.strftime("%d-%m-%Y %H:%M:%S")
+            newInodo1.i_block[0] = 1
+            newInodo1.i_type = 1
+            newInodo1.i_perm = 664;
+            #inodohijo + bloquehijo + inodopadre
+            newInodo.i_size = newInodo1.i_size + 64 + 137
+        
+            newBlockFile:BlockFile = BlockFile()
+            newBlockFile.setContent(data)
+
+            #Crear Carpeta root  /  inodo 0
+            file.seek(newSuperBlock.bm_inode_start)
+            file.write(b'1' *2)
+
+            file.seek(newSuperBlock.bm_block_start)
+            file.write(b'1' *2)
+
+            file.seek(newSuperBlock.inode_start)
+            file.write(newInodo.getBytes())
+            file.seek(newSuperBlock.inode_start + 137)
+            file.write(newInodo1.getBytes())
+
+            file.seek(newSuperBlock.block_start)
+            file.write(newBlock.getBytes())
+            file.seek(newSuperBlock.block_start + 64)
+            file.write(newBlockFile.getBytes())
+
+            print('Sistema de archivos creado correctamente')
+
+
+
     except Exception as e:
         exception_type, exception_object, exception_traceback = sys.exc_info()
         filename = exception_traceback.tb_frame.f_code.co_filename
@@ -528,29 +576,116 @@ def mkfs_ext2(mount: Mount):
         print('Error: ',e)
         return False
 
+def mkfs_ext3(mount: Mount):
+    tmp_part = mount.Partition
 
-    # n = (tmp_part.size-98/(4+))
+    #ext3 = (Part.size - Superblock.size)/(4+journaling.size+inodo.size+3(block.size))
+    ext3 = (tmp_part.size - 98) / (4 + 1024 + 137 + (3 * 64))
+
+    current_time = datetime.now()
+    newSuperBlock:SuperBlock = SuperBlock()
+    newSuperBlock.umtiem = current_time.strftime("%d-%m-%Y %H:%M:%S")
+    newSuperBlock.mnt_count = 1
+
+    newSuperBlock.filesystem_type = 3
+    newSuperBlock.inodecount = int(ext3)
+    newSuperBlock.blockcount = int(3*ext3)
+    newSuperBlock.free_inodecount = int(ext3)
+    newSuperBlock.free_blockcount = int(3*ext3)
+
+    newSuperBlock.bm_inode_start = int(tmp_part.start + 98)
+    newSuperBlock.bm_block_start = int(newSuperBlock.bm_inode_start + ext3)
+    newSuperBlock.inode_start = int(newSuperBlock.bm_block_start + (3*ext3))
+    newSuperBlock.block_start = int(newSuperBlock.inode_start + (ext3*137))
+
+    totalSize = int(newSuperBlock.block_start) + (3 * ext3 * 64)
+    totalSize = totalSize - tmp_part.start
+    if totalSize > tmp_part.size:  
+        print('no hay espacio suficiente')
+        return
+
+    try:
+        with open(mount.Path.replace(' ',''), 'rb+') as file:
+            #Escrubir SuperBloque
+            file.seek(tmp_part.start)
+            file.write(newSuperBlock.getBytes())
+
+            #Escribir Bitmap de Inodos
+            file.seek(newSuperBlock.bm_inode_start)
+            file.write(b'0' * int(ext3))
+
+            #Escribir Bitmap de Bloques
+            file.seek(newSuperBlock.bm_block_start)
+            file.write(b'0' * int(3*ext3))
+
+            
+            #Primer Inodo
+            newInodo:Inodo = Inodo()
+            newInodo.i_uid = 1
+            newInodo.i_gid = 1
+            newInodo.i_size = 0
+            newInodo.i_atime = current_time.strftime("%d-%m-%Y %H:%M:%S")
+            newInodo.i_mtime = current_time.strftime("%d-%m-%Y %H:%M:%S")
+            newInodo.i_block[0] = 0
+            newInodo.i_type = 0
+            newInodo.i_perm = 664;  ##  permisos  los primeros 3 bits Uusuario i_uid. los siguientes 3  grupo que pertenece y ultimos 3 permisos de otros usuarios.
+            
+            newBlock:Block = Block()
+            newBlock.b_content[0].setName('.')
+            newBlock.b_content[0].b_inodo = 0
+            newBlock.b_content[1].setName('..')
+            newBlock.b_content[1].b_inodo = 0
+            newBlock.b_content[2].setName('users.txt') 
+            newBlock.b_content[2].b_inodo = 1
+            newBlock.b_content[3].setName('-') 
+            newBlock.b_content[3].b_inodo = -1
+
+
+            #inodo 1
+            data = "1,G,root\n1,U,root,root,123\n";
+            newInodo1:Inodo = Inodo()
+            newInodo1.i_uid = 1
+            newInodo1.i_gid = 1 
+            newInodo1.i_size = len(data) + 64 # 64 es el tamaño del bloque
+            newInodo1.i_atime = current_time.strftime("%d-%m-%Y %H:%M:%S")
+            newInodo1.i_mtime = current_time.strftime("%d-%m-%Y %H:%M:%S")
+            newInodo1.i_block[0] = 1
+            newInodo1.i_type = 1
+            newInodo1.i_perm = 664;
+            #inodohijo + bloquehijo + inodopadre
+            newInodo.i_size = newInodo1.i_size + 64 + 137
+        
+            newBlockFile:BlockFile = BlockFile()
+            newBlockFile.setContent(data)
+
+            #Crear Carpeta root  /  inodo 0
+            file.seek(newSuperBlock.bm_inode_start)
+            file.write(b'1' *2)
+
+            file.seek(newSuperBlock.bm_block_start)
+            file.write(b'1' *2)
+
+            file.seek(newSuperBlock.inode_start)
+            file.write(newInodo.getBytes())
+            file.seek(newSuperBlock.inode_start + 137)
+            file.write(newInodo1.getBytes())
+
+            file.seek(newSuperBlock.block_start)
+            file.write(newBlock.getBytes())
+            file.seek(newSuperBlock.block_start + 64)
+            file.write(newBlockFile.getBytes())
+
+            print('Sistema de archivos creado correctamente')
 
 
 
-
-
-
-
-
-    
-    print("mkfs:")
-
-def login_cmd(tokens):
-    print("login:", tokens)
-
-def logout_cmd(tokens):
-    print("logout:", tokens)
-
-def mkgrp_cmd(tokens):
-    print("mkgrp:", tokens)
-
-def rmgrp_cmd(tokens):
-    print("rmgrp:", tokens)
-
-
+    except Exception as e:
+        exception_type, exception_object, exception_traceback = sys.exc_info()
+        filename = exception_traceback.tb_frame.f_code.co_filename
+        line_number = exception_traceback.tb_lineno
+        print("No se pudo leer la información del disco.")
+        print("Exception type: ", exception_type)
+        print("File name: ", filename)
+        print("Line number: ", line_number)
+        print('Error: ',e)
+        return False

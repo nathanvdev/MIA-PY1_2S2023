@@ -1,5 +1,6 @@
 import os
 import re
+import sys
 import main, reprtes, argparse
 from structs import Mount
 
@@ -153,7 +154,7 @@ def cmd_parser(text):
 
         tmp_mount = Mount(0,'-','-',None)
 
-        for mount in Mount:
+        for mount in Mounts:
             if mount.id == args.id:
                 tmp_mount = mount
                 break
@@ -163,7 +164,7 @@ def cmd_parser(text):
             return
 
         if args.fs == '2fs':
-            pass
+            main.mkfs_ext2(tmp_mount)
         elif args.fs == '3fs':
             pass
 
@@ -172,14 +173,14 @@ def cmd_parser(text):
             for mount in Mounts:
                 if mount.id == args.id:
                     reprtes.MBrReport(args.path, mount)
-                    break
+                    return
             print('no se encontro la particion montada')
 
         elif args.name == 'disk':
             for mount in Mounts:
                 if mount.id == args.id:
                     reprtes.DiskReport(args.path, mount)
-                    break
+                    return
             print('no se encontro la particion montada')
         
             
@@ -213,7 +214,13 @@ def cmd_parser(text):
         except FileNotFoundError:
             print(f"El archivo '{args.path}' no se encontró.")
         except Exception as e:
-            print(f"Ocurrió un error al leer el archivo: {str(e)}")
+            exception_type, exception_object, exception_traceback = sys.exc_info()
+            filename = exception_traceback.tb_frame.f_code.co_filename
+            line_number = exception_traceback.tb_lineno
+            print("Exception type: ", exception_type)
+            print("File name: ", filename)
+            print("Line number: ", line_number)
+            print('Error: ',e)
 
     else:
         print("Comando no reconocido")

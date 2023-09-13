@@ -4,12 +4,9 @@ from structs import MBr, EBr, Partition, Mount, SuperBlock, Inodo
 
 
 def MBrReport(Path, mount:Mount):
-    Path = Path.replace('"','')
-    os.makedirs(Path, exist_ok=True)
-
     tmp_MBr:MBr = MBr(0,'-')
 
-    with open(mount.Path, 'rb') as file:
+    with open(mount.Path.replace('"',''), 'rb') as file:
         bindata = file.read()
         tmp_MBr.set_bytes(bindata)
         
@@ -19,7 +16,7 @@ def MBrReport(Path, mount:Mount):
         
         # Genera el reporte
         DotCode = f'''digraph G{{
-            node [shape=plaintext fontname="Courier New"]
+            node [shape=plaintext fontname="Courier-bold"]
             tabla [label=<<table border="3" cellborder="1" cellspacing="2">
                 <tr>
                     <td colspan="30" bgcolor="#E5D518" border="3" > REPORTE DE MBr </td> 
@@ -50,7 +47,7 @@ def MBrReport(Path, mount:Mount):
             if partition.type == 'p':
                 DotCode += "       <td colspan=\"30\" align=\"left\" bgcolor=\"#EA2745\" border=\"1\"> PARTICION PRIMARIA</td> \n"
             elif partition.type == 'e':
-                DotCode += "       <td colspan=\"30\" align=\"left\" bgcolor=\"#EA2745\" border=\"1\"> PARTICION EXTENDIDA</td> \n"
+                DotCode += "       <td colspan=\"30\" align=\"left\" bgcolor=\"#3BF088\" border=\"1\"> PARTICION EXTENDIDA</td> \n"
             DotCode += f'''   </tr>
     <tr>
         <td align="center" colspan="15" bgcolor="#C7C4A6"> part_status: </td> 
@@ -77,101 +74,133 @@ def MBrReport(Path, mount:Mount):
         <td align="center" colspan="15" bgcolor="#C7C4A6"> {partition.fit} </td> 
     </tr>
     '''
-
             if partition.type == 'e':
-                tmp_EBr:EBr = EBr()
-                with open(mount.Path, 'rb') as file:
-                    bindata = file.read()
-                    tmp_EBr.setBytes(bindata[(partition.start):(partition.start+33)])
-                    
-                    while tmp_EBr.next != -1:
-                        if tmp_EBr.status != 1:
-                            tmp_EBr.setBytes(bindata[(tmp_EBr.next):(tmp_EBr.next+33)])
-                            continue
-                        DotCode += f'''
+                Logics = []
+                tmp_EBr = EBr()
+                tmp_EBr.setBytes(bindata[(partition.start):(partition.start + 33)])
+                Logics.append(copy.copy(tmp_EBr))
+
+                while tmp_EBr.next != -1:
+                    tmp_EBr.setBytes(bindata[(tmp_EBr.next):(tmp_EBr.next + 33)])
+                    Logics.append(copy.copy(tmp_EBr))
+
+                for logic in Logics:
+                    if logic.status != 1:
+                        continue
+                    DotCode += f'''
         <tr>
             <td colspan="30" align="left" bgcolor="#27EADE" border="1"> PARTICION LOGICA</td> 
         </tr>
         <tr>
             <td align="center" colspan="15" bgcolor="#C7C4A6"> part_status: </td> 
-            <td align="center" colspan="15" bgcolor="#C7C4A6"> {tmp_EBr.status} </td> 
+            <td align="center" colspan="15" bgcolor="#C7C4A6"> {logic.status} </td> 
         </tr>
         <tr>
             <td align="center" colspan="15" bgcolor="#C7C4A6"> part_fit: </td> 
-            <td align="center" colspan="15" bgcolor="#C7C4A6"> {tmp_EBr.fit} </td> 
+            <td align="center" colspan="15" bgcolor="#C7C4A6"> {logic.fit} </td> 
         </tr>
         <tr>
             <td align="center" colspan="15" bgcolor="#C7C4A6"> part_size: </td> 
-            <td align="center" colspan="15" bgcolor="#C7C4A6"> {tmp_EBr.size} </td> 
+            <td align="center" colspan="15" bgcolor="#C7C4A6"> {logic.size} </td> 
         </tr>
         <tr>
             <td align="center" colspan="15" bgcolor="#C7C4A6"> part_start: </td> 
-            <td align="center" colspan="15" bgcolor="#C7C4A6"> {tmp_EBr.start} </td> 
+            <td align="center" colspan="15" bgcolor="#C7C4A6"> {logic.start} </td> 
         </tr>
         <tr>
             <td align="center" colspan="15" bgcolor="#C7C4A6"> part_next: </td> 
-            <td align="center" colspan="15" bgcolor="#C7C4A6"> {tmp_EBr.next} </td> 
+            <td align="center" colspan="15" bgcolor="#C7C4A6"> {logic.next} </td> 
         </tr>
         <tr>
             <td align="center" colspan="15" bgcolor="#C7C4A6"> part_name: </td> 
-            <td align="center" colspan="15" bgcolor="#C7C4A6"> {tmp_EBr.name} </td> 
+            <td align="center" colspan="15" bgcolor="#C7C4A6"> {logic.name.replace(' ','')} </td> 
         </tr>
                         '''
-                        tmp_EBr.setBytes(bindata[(tmp_EBr.next):(tmp_EBr.next+33)])
+                        
+
 
         DotCode += "</table>>]\n"
         DotCode += "}\n" 
-        print(DotCode)
+        WriteDot(DotCode, Path)
 
 def DiskReport(Path, mount:Mount):
-    Path = Path.replace('"','')
-    os.makedirs(Path, exist_ok=True)
 
-    tmp_MBr:MBr = MBr(0,'-')
-
-    with open(mount.Path, 'rb') as file:
+   with open(mount.Path.replace('"',''), 'rb+') as file:
         bindata = file.read()
+        tmp_MBr:MBr = MBr(0,'-')
         tmp_MBr.set_bytes(bindata)
-        if tmp_MBr == None:
-            print('no se encontro el disco')
-            return
-        
-        DotCode = f'''digraph {{
-            node [shape=plaintext];
-            A [label=<<TABLE BORDER="6" CELLBORDER="2" CELLSPACING="1" WIDTH="300" HEIGHT="200">
-            <TR>
-            <TD ROWSPAN="3" WIDTH="300" HEIGHT="200"> MBR </TD>
-        }}'''
 
-
-        part:Partition
-        for part in tmp_MBr.partitions:
-            if part.status != 1:
-                continue
-            if part.type == 'p':
-                percentage_allocated = (part.size / tmp_MBr.size) * 100
-                formatted_percentage = round(percentage_allocated * 100.0) / 100.0
-                percentage_info = str(formatted_percentage) + " % del disco"
-                DotCode += "<TD ROWSPAN=\"3\" WIDTH=\"300\" HEIGHT=\"200\"> PARTICION PRIMARIA <BR/>" + part.name + "<BR/>" + percentage_info + "</TD>\n"
-
-
-            elif part.type == 'e':
+        DotCode = f'''
+digraph {{ node [shape=plaintext fontname="Courier-bold" fontsize="40"]; A [label=<
+<table border="10" CELLBORDER="10" cellspacing="0" width="300" HEIGHT="200">
+  <tr>
+    <td rowspan="3" width="300" bgcolor="#EA2745" height="200">MBR</td>'''
+        partition: Partition
+        for partition in tmp_MBr.partitions:
+            if partition.status != 1:
+                percent = round((partition.size / tmp_MBr.size) * 100)
+                DotCode += f'''
+    <td rowspan="3" width="300" bgcolor="#808080" height="200">Libre<br/>{partition.name.replace(' ','')}<br/>{str(percent)}% del disco</td>'''
+            
+            elif partition.type == 'p':
+                percent =  round((partition.size / tmp_MBr.size) * 100)
+                DotCode += f'''
+    <td rowspan="3" width="300" bgcolor="#0C78F0" height="200">Primaria<br/>{partition.name.replace(' ','')}<br/>{str(percent)}% del disco</td>'''
+            
+            elif partition.type == 'e':
                 Logics = []
                 tmp_EBr = EBr()
-                tmp_EBr.setBytes(bindata[(part.start):(part.start + 33)])
+                tmp_EBr.setBytes(bindata[(partition.start):(partition.start + 33)])
                 Logics.append(copy.copy(tmp_EBr))
+
                 while tmp_EBr.next != -1:
                     tmp_EBr.setBytes(bindata[(tmp_EBr.next):(tmp_EBr.next + 33)])
                     Logics.append(copy.copy(tmp_EBr))
+                
 
-                percentage_allocated = (float(part.size) / tmp_MBr.size) * 100
-                formatted_percentage = round(percentage_allocated, 2)
-                percentage_info = f"{formatted_percentage} % del disco"
 
-                DotCode += "<TD>\n"
-                DotCode += "   <TABLE BORDER=\"2\" CELLBORDER=\"5\" CELLSPACING=\"3\" WIDTH=\"300\" HEIGHT=\"200\">\n"
 
-                for x in range(Logics):
-                    pass
+                percent =  round((partition.size / tmp_MBr.size) * 100)
+                DotCode += f'''
+    <td>
+      <table border="0" CELLBORDER="10" cellspacing="0" width="300" HEIGHT="200">
+    <tr>
+      <td colspan="3" width="300" bgcolor="#3BF088" height="200">Extendida<br/>{partition.name.replace(' ','')}<br/>{percent}% del disco</td>
+    </tr>
+    <tr>'''
+                logic:EBr
+                for logic in Logics:
+                    if logic.status != 1:
+                        percent =  round((logic.size / partition.size) * 100)
+                        DotCode += f'''
+      <td rowspan="3" width="300" bgcolor="#808080" height="200">Libre<br/>{logic.name.replace(' ','')}<br/>{percent}% de la extendida</td>'''
+                    else:
+                        percent =  round((logic.size / partition.size) * 100)
+                        DotCode += f'''
+      <td rowspan="3" width="300" bgcolor="#00EFEF" height="200">Logica<br/>{logic.name.replace(' ','')}<br/>{percent}% de la extendida</td>'''
+                DotCode += f''' 
+          </tr>
+        </table>
+     </td>'''
+                
+        DotCode += f'''
+  </tr>
+</table>
+> ]; }}'''
+
+        WriteDot(DotCode, Path)
+
+
+def WriteDot(GraphCode:str, Path:str):
+    Path = Path.replace('"', '')
+    directorio = os.path.dirname(Path)
+    os.makedirs(directorio, exist_ok=True)
     
 
+    NewFile= open('{}.dot'.format(Path),'w')
+    NewFile.write(GraphCode)
+    NewFile.close()
+
+    os.system('dot -Tsvg {}.dot -o {}.svg'.format(Path,Path))
+
+    print('Reporte generado con exito '+ Path)
