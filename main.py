@@ -1,5 +1,6 @@
+from math import floor
 import os, sys
-from structs import MBr, EBr, Mount, SuperBlock, Inodo, Block, BlockFile
+from structs import Journaling, MBr, EBr, Mount, SuperBlock, Inodo, Block, BlockFile
 from datetime import datetime
 
 
@@ -465,8 +466,8 @@ def mkfs_ext2(mount: Mount):
 
     #ext2 = (Part.size - Superblock.size)/(4+inodo.size+3(block.size))
     ext2 = (tmp_part.size - 98) / (4 + 137 + (3 * 64))
-    #ext3 = (Part.size - Superblock.size)/(4+journaling.size+inodo.size+3(block.size))
-    ext3 = (tmp_part.size - 98) / (4 + 1024 + 137 + (3 * 64))
+    ext2 = floor(ext2)
+
 
     current_time = datetime.now()
     newSuperBlock:SuperBlock = SuperBlock()
@@ -476,8 +477,8 @@ def mkfs_ext2(mount: Mount):
     newSuperBlock.filesystem_type = 2
     newSuperBlock.inodecount = int(ext2)
     newSuperBlock.blockcount = int(3*ext2)
-    newSuperBlock.free_inodecount = int(ext2)
-    newSuperBlock.free_blockcount = int(3*ext2)
+    newSuperBlock.free_inodecount = int(ext2)-2
+    newSuperBlock.free_blockcount = int(3*ext2)-2
 
     newSuperBlock.bm_inode_start = int(tmp_part.start + 98)
     newSuperBlock.bm_block_start = int(newSuperBlock.bm_inode_start + ext2)
@@ -497,12 +498,18 @@ def mkfs_ext2(mount: Mount):
             file.write(newSuperBlock.getBytes())
 
             #Escribir Bitmap de Inodos
-            file.seek(newSuperBlock.bm_inode_start)
             file.write(b'0' * int(ext2))
 
             #Escribir Bitmap de Bloques
-            file.seek(newSuperBlock.bm_block_start)
             file.write(b'0' * int(3*ext2))
+
+            #Escribir Inodos
+            Inodotmp = Inodo()
+            file.write(Inodotmp.getBytes() * int(ext2))
+
+            #Escribir Bloques
+            Blocktmp = Block()
+            file.write(Blocktmp.getBytes() * int(3*ext2))
 
             
             #Primer Inodo
@@ -511,6 +518,7 @@ def mkfs_ext2(mount: Mount):
             newInodo.i_gid = 1
             newInodo.i_size = 0
             newInodo.i_atime = current_time.strftime("%d-%m-%Y %H:%M:%S")
+            newInodo.i_ctime = current_time.strftime("%d-%m-%Y %H:%M:%S")
             newInodo.i_mtime = current_time.strftime("%d-%m-%Y %H:%M:%S")
             newInodo.i_block[0] = 0
             newInodo.i_type = 0
@@ -553,12 +561,10 @@ def mkfs_ext2(mount: Mount):
 
             file.seek(newSuperBlock.inode_start)
             file.write(newInodo.getBytes())
-            file.seek(newSuperBlock.inode_start + 137)
             file.write(newInodo1.getBytes())
 
             file.seek(newSuperBlock.block_start)
             file.write(newBlock.getBytes())
-            file.seek(newSuperBlock.block_start + 64)
             file.write(newBlockFile.getBytes())
 
             print('Sistema de archivos creado correctamente')
@@ -581,6 +587,7 @@ def mkfs_ext3(mount: Mount):
 
     #ext3 = (Part.size - Superblock.size)/(4+journaling.size+inodo.size+3(block.size))
     ext3 = (tmp_part.size - 98) / (4 + 1024 + 137 + (3 * 64))
+    ext3 = floor(ext3)
 
     current_time = datetime.now()
     newSuperBlock:SuperBlock = SuperBlock()
@@ -590,19 +597,14 @@ def mkfs_ext3(mount: Mount):
     newSuperBlock.filesystem_type = 3
     newSuperBlock.inodecount = int(ext3)
     newSuperBlock.blockcount = int(3*ext3)
-    newSuperBlock.free_inodecount = int(ext3)
-    newSuperBlock.free_blockcount = int(3*ext3)
+    newSuperBlock.free_inodecount = int(ext3)-2
+    newSuperBlock.free_blockcount = int(3*ext3)-2
 
-    newSuperBlock.bm_inode_start = int(tmp_part.start + 98)
+    newSuperBlock.bm_inode_start = int(tmp_part.start + 98 + (ext3*189))
     newSuperBlock.bm_block_start = int(newSuperBlock.bm_inode_start + ext3)
     newSuperBlock.inode_start = int(newSuperBlock.bm_block_start + (3*ext3))
     newSuperBlock.block_start = int(newSuperBlock.inode_start + (ext3*137))
 
-    totalSize = int(newSuperBlock.block_start) + (3 * ext3 * 64)
-    totalSize = totalSize - tmp_part.start
-    if totalSize > tmp_part.size:  
-        print('no hay espacio suficiente')
-        return
 
     try:
         with open(mount.Path.replace(' ',''), 'rb+') as file:
@@ -610,13 +612,22 @@ def mkfs_ext3(mount: Mount):
             file.seek(tmp_part.start)
             file.write(newSuperBlock.getBytes())
 
+            Journaltmp = Journaling()
+            file.write(Journaltmp.getBytes() * int(ext3))
+
             #Escribir Bitmap de Inodos
-            file.seek(newSuperBlock.bm_inode_start)
             file.write(b'0' * int(ext3))
 
             #Escribir Bitmap de Bloques
-            file.seek(newSuperBlock.bm_block_start)
             file.write(b'0' * int(3*ext3))
+
+            #Escribir Inodos
+            Inodotmp = Inodo()
+            file.write(Inodotmp.getBytes() * int(ext3))
+
+            #Escribir Bloques
+            Blocktmp = Block()
+            file.write(Blocktmp.getBytes() * int(3*ext3))
 
             
             #Primer Inodo
@@ -625,6 +636,7 @@ def mkfs_ext3(mount: Mount):
             newInodo.i_gid = 1
             newInodo.i_size = 0
             newInodo.i_atime = current_time.strftime("%d-%m-%Y %H:%M:%S")
+            newInodo.i_ctime = current_time.strftime("%d-%m-%Y %H:%M:%S")
             newInodo.i_mtime = current_time.strftime("%d-%m-%Y %H:%M:%S")
             newInodo.i_block[0] = 0
             newInodo.i_type = 0
@@ -648,6 +660,7 @@ def mkfs_ext3(mount: Mount):
             newInodo1.i_gid = 1 
             newInodo1.i_size = len(data) + 64 # 64 es el tamaño del bloque
             newInodo1.i_atime = current_time.strftime("%d-%m-%Y %H:%M:%S")
+            newInodo.i_ctime = current_time.strftime("%d-%m-%Y %H:%M:%S")
             newInodo1.i_mtime = current_time.strftime("%d-%m-%Y %H:%M:%S")
             newInodo1.i_block[0] = 1
             newInodo1.i_type = 1
@@ -658,7 +671,28 @@ def mkfs_ext3(mount: Mount):
             newBlockFile:BlockFile = BlockFile()
             newBlockFile.setContent(data)
 
-            #Crear Carpeta root  /  inodo 0
+            bindata = file.read()
+            
+            Journal1 = Journaling()
+            Journal1.setBytes(bindata[tmp_part.start + 98:])
+            Journal1.Operation = 'mkdir'.ljust(10)[:10]
+            Journal1.Path = '/'.ljust(100)[:100]
+            Journal1.content = 'raiz'.ljust(60)[:60]
+            Journal1.Date = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
+            file.seek(tmp_part.start + 98)
+            file.write(Journal1.getBytes())
+
+            Journal2 = Journaling()
+            Journal2.setBytes(bindata[tmp_part.start + 98 + 189:])
+            Journal2.Operation = 'mkfile'.ljust(10)[:10]
+            Journal2.Path = '/users.txt'.ljust(100)[:100]
+            Journal2.content = data.ljust(60)[:60]
+            Journal2.Date = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
+            file.write(Journal2.getBytes())
+
+
+
+            #Crear Carpeta root  /  inodo 0,1
             file.seek(newSuperBlock.bm_inode_start)
             file.write(b'1' *2)
 
@@ -667,17 +701,13 @@ def mkfs_ext3(mount: Mount):
 
             file.seek(newSuperBlock.inode_start)
             file.write(newInodo.getBytes())
-            file.seek(newSuperBlock.inode_start + 137)
             file.write(newInodo1.getBytes())
 
             file.seek(newSuperBlock.block_start)
             file.write(newBlock.getBytes())
-            file.seek(newSuperBlock.block_start + 64)
             file.write(newBlockFile.getBytes())
 
             print('Sistema de archivos creado correctamente')
-
-
 
     except Exception as e:
         exception_type, exception_object, exception_traceback = sys.exc_info()

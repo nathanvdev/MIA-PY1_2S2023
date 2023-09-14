@@ -177,12 +177,11 @@ class SuperBlock:
 
 class Inodo:
     def __init__(self):
-        current_time = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
         self.i_uid = -1                 #int 4bytes
         self.i_gid = -1                 #int 4bytes
         self.i_size = -1                #int 4bytes
         self.i_atime = '-'.ljust(19)[:19]   #char 19bytes
-        self.i_ctime = current_time         #char 19bytes
+        self.i_ctime = '-'.ljust(19)[:19]         #char 19bytes
         self.i_mtime = '-'.ljust(19)[:19]   #char 19bytes
         self.i_block = [-1] * 15        #int 60bytes
         self.i_type = -1                #int 4bytes
@@ -275,4 +274,23 @@ class BlockFile:
         self.b_content = content.ljust(64)[:64]
 
 class Journaling:
-    pass
+    def __init__(self, op = '-'):
+        self.Operation = op.ljust(10)[:10]
+        self.Path = '-'.ljust(100)[:100]
+        self.content = '-'.ljust(60)[:60]
+        self.Date = '-'.ljust(19)[:19]
+        #-------------------------------------> 189 bytes
+
+    def getBytes(self):
+        bytes = bytearray()
+        bytes += self.Operation.encode('utf-8')
+        bytes += self.Path.encode('utf-8')
+        bytes += self.content.encode('utf-8')
+        bytes += self.Date.encode('utf-8')
+        return bytes
+    
+    def setBytes(self, bytes):
+        self.Operation = bytes[0:10].decode('utf-8')
+        self.Path = bytes[10:110].decode('utf-8')
+        self.content = bytes[110:170].decode('utf-8')
+        self.Date = bytes[170:189].decode('utf-8')

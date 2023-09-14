@@ -166,7 +166,7 @@ def cmd_parser(text):
         if args.fs == '2fs':
             main.mkfs_ext2(tmp_mount)
         elif args.fs == '3fs':
-            pass
+            main.mkfs_ext3(tmp_mount)
 
     elif args.command == 'rep':
         if args.name == 'mbr':
