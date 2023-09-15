@@ -169,19 +169,32 @@ def cmd_parser(text):
             main.mkfs_ext3(tmp_mount)
 
     elif args.command == 'rep':
+
         if args.name == 'mbr':
             for mount in Mounts:
                 if mount.id == args.id:
                     reprtes.MBrReport(args.path, mount)
                     return
-            print('no se encontro la particion montada')
 
         elif args.name == 'disk':
             for mount in Mounts:
                 if mount.id == args.id:
                     reprtes.DiskReport(args.path, mount)
                     return
-            print('no se encontro la particion montada')
+
+        elif args.name == 'inode':
+            for mount in Mounts:
+                if mount.id == args.id:
+                    reprtes.InodeReport(args.path, mount)
+                    return
+
+        elif args.name == 'block':
+            for mount in Mounts:
+                if mount.id == args.id:
+                    reprtes.BlockReport(args.path, mount)
+                    return
+                
+        print('no se encontro la particion montada')
         
             
     elif args.command == 'execute':

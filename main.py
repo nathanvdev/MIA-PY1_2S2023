@@ -542,6 +542,7 @@ def mkfs_ext2(mount: Mount):
             newInodo1.i_gid = 1 
             newInodo1.i_size = len(data) + 64 # 64 es el tamaño del bloque
             newInodo1.i_atime = current_time.strftime("%d-%m-%Y %H:%M:%S")
+            newInodo1.i_ctime = current_time.strftime("%d-%m-%Y %H:%M:%S")
             newInodo1.i_mtime = current_time.strftime("%d-%m-%Y %H:%M:%S")
             newInodo1.i_block[0] = 1
             newInodo1.i_type = 1
@@ -660,7 +661,7 @@ def mkfs_ext3(mount: Mount):
             newInodo1.i_gid = 1 
             newInodo1.i_size = len(data) + 64 # 64 es el tamaño del bloque
             newInodo1.i_atime = current_time.strftime("%d-%m-%Y %H:%M:%S")
-            newInodo.i_ctime = current_time.strftime("%d-%m-%Y %H:%M:%S")
+            newInodo1.i_ctime = current_time.strftime("%d-%m-%Y %H:%M:%S")
             newInodo1.i_mtime = current_time.strftime("%d-%m-%Y %H:%M:%S")
             newInodo1.i_block[0] = 1
             newInodo1.i_type = 1

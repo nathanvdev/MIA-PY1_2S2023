@@ -216,7 +216,7 @@ class Inodo:
             self.i_block[x] = int.from_bytes(bytes[start:finish], byteorder='big', signed=True)
             start += 4
             finish += 4
-        self.i_type = int.from_bytes(bytes[125:129], byteorder='big', signed=True)
+        self.i_type = int.from_bytes(bytes[129:133], byteorder='big', signed=True)
         self.i_perm = int.from_bytes(bytes[133:137], byteorder='big', signed=True)
 
 class Content:
@@ -251,11 +251,11 @@ class Block:
     
     def setBytes(self, bytes):
         start = 0
-        finish = 4
+        finish = 16
         for x in range(0,3):
-            self.b_content[x] = int.from_bytes(bytes[start:finish], byteorder='big', signed=True)
-            start += 4
-            finish += 4
+            self.b_content[x].setBytes(bytes[start:finish])
+            start += 16
+            finish += 16
     
 
 class BlockFile:
